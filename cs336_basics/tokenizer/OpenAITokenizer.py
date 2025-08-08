@@ -31,7 +31,6 @@ class OpenAITokenizer:
     
     def encode(self, text: str) -> list[int]:
         tokens = self.tokenizer.encode(text, allowed_special={'<|endoftext|>'})
-        # Ограничиваем токены до max_vocab_size, заменяя неизвестные на UNK (100)
         if self.vocab_size < self.full_vocab_size:
             tokens = [token if token < self.vocab_size else 100 for token in tokens]
         return tokens
