@@ -3,10 +3,16 @@ from typing import Iterator, Iterable
 
 
 class OpenAITokenizer:
-    def __init__(self, model_name="gpt2"):
+    def __init__(self, model_name="gpt2", max_vocab_size=None):
         self.tokenizer = tiktoken.get_encoding(model_name)
         self.model_name = model_name
-        self.vocab_size = self.tokenizer.n_vocab
+        self.full_vocab_size = self.tokenizer.n_vocab
+        
+        # Ограничиваем vocab_size если указан max_vocab_size
+        if max_vocab_size and max_vocab_size < self.full_vocab_size:
+            self.vocab_size = max_vocab_size
+        else:
+            self.vocab_size = self.full_vocab_size
         
     @property
     def vocab(self):
@@ -24,7 +30,11 @@ class OpenAITokenizer:
         return VocabProxy(self.vocab_size)
     
     def encode(self, text: str) -> list[int]:
-        return self.tokenizer.encode(text, allowed_special={'<|endoftext|>'})
+        tokens = self.tokenizer.encode(text, allowed_special={'<|endoftext|>'})
+        # Ограничиваем токены до max_vocab_size, заменяя неизвестные на UNK (100)
+        if self.vocab_size < self.full_vocab_size:
+            tokens = [token if token < self.vocab_size else 100 for token in tokens]
+        return tokens
     
     def encode_iterable(self, iterable: Iterable[str]) -> Iterator[int]:
         for text in iterable:
@@ -44,4 +54,7 @@ class OpenAITokenizer:
         return self.vocab_size
     
     def __repr__(self):
-        return f"OpenAITokenizer(model='{self.model_name}', vocab_size={self.vocab_size})"
+        if self.vocab_size < self.full_vocab_size:
+            return f"OpenAITokenizer(model='{self.model_name}', vocab_size={self.vocab_size}/{self.full_vocab_size})"
+        else:
+            return f"OpenAITokenizer(model='{self.model_name}', vocab_size={self.vocab_size})"
