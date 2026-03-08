@@ -104,7 +104,9 @@ def run_scaled_dot_product_attention(
     Returns:
         Float[Tensor, " ... queries d_v"]: Output of SDPA
     """
-    raise NotImplementedError
+    from cs336_basics.model.scaled_dot_product_attn import scaled_dot_product_attention
+    return scaled_dot_product_attention(Q,K,V,mask=mask)
+
 
 
 def run_multihead_self_attention(
@@ -138,7 +140,29 @@ def run_multihead_self_attention(
         Float[Tensor, " ... sequence_length d_out"]: Tensor with the output of running your optimized, batched multi-headed attention
         implementation with the given QKV projection weights and input features.
     """
-    raise NotImplementedError
+    from cs336_basics.model.scaled_dot_product_attn import MultiHeadAttention
+    assert d_model % num_heads == 0
+
+    *batch_dims, sequence_length, d_in = in_features.shape
+    assert d_in == d_model
+
+    x = in_features.reshape(-1, sequence_length, d_in)
+
+    mha = MultiHeadAttention(
+        d_model=d_model,
+        num_heads=num_heads,
+        use_rope=False,
+        device=x.device,
+    ).to(dtype=x.dtype, device=x.device)
+
+    with torch.no_grad():
+        mha.Wq.copy_(q_proj_weight.T.to(device=x.device, dtype=x.dtype))
+        mha.Wk.copy_(k_proj_weight.T.to(device=x.device, dtype=x.dtype))
+        mha.Wv.copy_(v_proj_weight.T.to(device=x.device, dtype=x.dtype))
+        mha.Wo.copy_(o_proj_weight.T.to(device=x.device, dtype=x.dtype))
+
+    out = mha(x)
+    return out.reshape(*batch_dims, sequence_length, d_model)
 
 
 def run_multihead_self_attention_with_rope(
@@ -153,32 +177,45 @@ def run_multihead_self_attention_with_rope(
     in_features: Float[Tensor, " ... sequence_length d_in"],
     token_positions: Int[Tensor, " ... sequence_length"] | None = None,
 ) -> Float[Tensor, " ... sequence_length d_out"]:
-    """
-    Given the key, query, and value projection weights of a naive unbatched
-    implementation of multi-head attention, return the output of an optimized batched
-    implementation. This implementation should handle the key, query, and value projections
-    for all heads in a single matrix multiply.
-    This version of MHA should include RoPE.
-    In this case, the RoPE embedding dimension must be the head embedding dimension (d_model // num_heads).
-    See section 3.2.2 of Vaswani et al., 2017.
+    from cs336_basics.model.scaled_dot_product_attn import MultiHeadAttention
 
-    Args:
-        d_model (int): Dimensionality of the feedforward input and output.
-        num_heads (int): Number of heads to use in multi-headed attention.
-        max_seq_len (int): Maximum sequence length to pre-cache if your implementation does that.
-        theta (float): RoPE parameter.
-        q_proj_weight (Float[Tensor, "d_k d_in"]): Weights for the Q projection
-        k_proj_weight (Float[Tensor, "d_k d_in"]): Weights for the K projection
-        v_proj_weight (Float[Tensor, "d_k d_in"]): Weights for the V projection
-        o_proj_weight (Float[Tensor, "d_model d_v"]): Weights for the output projection
-        in_features (Float[Tensor, "... sequence_length d_in"]): Tensor to run your implementation on.
-        token_positions (Int[Tensor, " ... sequence_length"] | None): Optional tensor with the positions of the tokens
+    assert d_model % num_heads == 0
 
-    Returns:
-        Float[Tensor, " ... sequence_length d_out"]: Tensor with the output of running your optimized, batched multi-headed attention
-        implementation with the given QKV projection weights and input features.
-    """
-    raise NotImplementedError
+    *batch_dims, sequence_length, d_in = in_features.shape
+    assert d_in == d_model
+
+    x = in_features.reshape(-1, sequence_length, d_in)
+
+    if token_positions is not None:
+        if token_positions.shape[-1] != sequence_length:
+            raise ValueError(
+                f"token_positions.shape[-1] must equal sequence_length={sequence_length}, "
+                f"got {token_positions.shape[-1]}"
+            )
+        if token_positions.ndim == 1:
+            flat_token_positions = token_positions.to(device=x.device)
+        else:
+            flat_token_positions = token_positions.reshape(-1, sequence_length).to(device=x.device)
+    else:
+        flat_token_positions = None
+
+    mha = MultiHeadAttention(
+        d_model=d_model,
+        num_heads=num_heads,
+        theta=theta,
+        max_seq_len=max_seq_len,
+        use_rope=True,
+        device=x.device,
+    ).to(dtype=x.dtype, device=x.device)
+
+    with torch.no_grad():
+        mha.Wq.copy_(q_proj_weight.T.to(device=x.device, dtype=x.dtype))
+        mha.Wk.copy_(k_proj_weight.T.to(device=x.device, dtype=x.dtype))
+        mha.Wv.copy_(v_proj_weight.T.to(device=x.device, dtype=x.dtype))
+        mha.Wo.copy_(o_proj_weight.T.to(device=x.device, dtype=x.dtype))
+
+    out = mha(x, token_positions=flat_token_positions)
+    return out.reshape(*batch_dims, sequence_length, d_model)
 
 
 def run_rope(
@@ -200,7 +237,9 @@ def run_rope(
     Returns:
         Float[Tensor, " ... sequence_length d_k"]: Tensor with RoPEd input.
     """
-    raise NotImplementedError
+    from cs336_basics.model.RoPe import RotaryPositionalEmbedding
+    rope = RotaryPositionalEmbedding(theta=theta, max_seq_len=max_seq_len, d_k=d_k)
+    return rope.forward(in_query_or_key, token_positions)
 
 
 def run_transformer_block(
