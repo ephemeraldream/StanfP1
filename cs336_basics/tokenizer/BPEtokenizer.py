@@ -133,10 +133,10 @@ class BPE:
 def test_train_bpe_special_tokens():
     path = '/home/ed/work/other_projects/stanLLMasingments/StanfP1/data/TinyStoriesV2-GPT4-train.txt'
     tokenizer = BPE(path, 1000, ["<|endoftext|>"])
-    vocab, merges = tokenizer.train_bpe()
+    vocab, merges = tokenizer.train_bpe(use_parallel=False)
     print(vocab)
     print("########################")
-    print(merges)   
+    print(merges)
 
 
 

@@ -1,14 +1,15 @@
-from einops import rearrange, reduce
+from einops import reduce
 import torch
 from torch import nn 
 
 
 class RMSNorm(nn.Module):
-    def __init__(self, d_model, eps: float = 1e-5, *args, **kwargs) -> None:
-        super().__init__(*args, **kwargs)
+    def __init__(self, d_model, eps: float = 1e-5, device=None, dtype=None) -> None:
+        super().__init__()
+        factory_kwargs = {"device": device, "dtype": dtype}
         self.d_model = d_model
         self.eps = eps
-        self.g = nn.Parameter(torch.ones(d_model))
+        self.g = nn.Parameter(torch.ones(d_model, **factory_kwargs))
 
     def forward(self, x: torch.Tensor):
         in_type = x.dtype
